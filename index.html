@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizarra Táctica Pro - Vertical</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --pitch-11-light: #2e7d32;
+            --pitch-11-dark: #1b5e20;
+            --pitch-5-light: #1565c0;
+            --pitch-5-dark: #0d47a1;
+            --team-a: #d32f2f;
+            --team-b: #1976d2;
+            --ball: #fff;
+            --line-color: rgba(255, 255, 255, 0.7);
+            --text-color: #e0e0e0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .layout {
+            display: flex;
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* Paneles de Control */
+        .controls-panel {
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            width: 300px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border: 1px solid #333;
+        }
+
+        h2, h3 { margin: 0; padding-bottom: 10px; border-bottom: 1px solid #333; font-size: 18px; color: #fff; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-group label { font-size: 13px; color: #aaa; font-weight: bold; }
+        
+        select, button {
+            padding: 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            background: #333;
+            color: #fff;
+            border: 1px solid #444;
+        }
+
+        select:focus, button:focus { outline: none; border-color: #666; }
+        select:hover { background: #444; }
+
+        button:active { transform: translateY(1px); }
+        .btn-mode { background: #ffb300; color: #000; border: none; font-size: 15px; }
+        .btn-mode.active { background: #e91e63; color: #fff; }
+        
+        .play-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .btn-play { background: #4caf50; border: none; }
+        .btn-pause { background: #f44336; border: none; }
+        .btn-resume { background: #2196f3; border: none; }
+        .btn-clear { background: #757575; border: none; grid-column: span 2; }
+        .btn-reset { background: transparent; border: 1px solid #f44336; color: #f44336; margin-top: 10px;}
+        .btn-reset:hover { background: rgba(244, 67, 54, 0.1); }
+
+        /* Cancha Vertical */
+        .pitch-wrapper {
+            position: relative;
+            background-color: var(--pitch-11-light);
+            border-radius: 8px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+            overflow: hidden;
+            /* Medidas incluyendo márgenes laterales (out of bounds) */
+            width: 500px;
+            height: 750px;
+            background-image: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 50px,
+                rgba(0,0,0,0.05) 50px,
+                rgba(0,0,0,0.05) 100px
+            );
+            transition: background-color 0.4s;
+        }
+
+        .pitch-wrapper.futsal {
+            background-color: var(--pitch-5-light);
+            background-image: none; /* Cancha lisa para futsal */
+        }
+
+        svg#lines {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        #pieces-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+        }
+
+        /* Fichas */
+        .piece {
+            position: absolute;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: grab;
+            user-select: none;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+            border: 2px solid #fff;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            transition: box-shadow 0.2s;
+        }
+        .piece:hover { box-shadow: 0 0 0 3px rgba(255,255,255,0.4); }
+        .piece:active { cursor: grabbing; z-index: 100 !important; }
+        .piece.teamA { background-color: var(--team-a); }
+        .piece.teamB { background-color: var(--team-b); }
+        .piece.ball {
+            background-color: var(--ball);
+            border: 1px solid #000;
+            color: transparent;
+            width: 18px; height: 18px;
+            z-index: 50;
+            background-image: radial-gradient(circle at 30% 30%, #fff 0%, #ddd 40%, #999 100%);
+        }
+
+        .instructions {
+            font-size: 12px;
+            color: #888;
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 900px) {
+            .layout { flex-direction: column; align-items: center; gap: 20px; }
+            .controls-panel { width: 100%; max-width: 500px; box-sizing: border-box; }
+            /* La cancha se escala al ancho disponible (ver ajustarEscalaCancha en JS) */
+            .pitch-wrapper {
+                transform: scale(var(--pitch-scale, 1));
+                transform-origin: top left;
+                margin-right: calc(500px * (var(--pitch-scale, 1) - 1));
+                margin-bottom: calc(750px * (var(--pitch-scale, 1) - 1));
+            }
+        }
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            .controls-panel { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="layout">
+    <div class="controls-panel">
+        <h2>Configuración</h2>
+        
+        <div class="control-group">
+            <label>Deporte</label>
+            <select id="sportMode" onchange="changeSport()">
+                <option value="11">Fútbol 11</option>
+                <option value="5">Fútbol Sala (5v5)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Alineación Equipo Azul (Arriba)</label>
+            <select id="formationB" onchange="applyFormation('B')"></select>
+        </div>
+
+        <div class="control-group">
+            <label>Alineación Equipo Rojo (Abajo)</label>
+            <select id="formationA" onchange="applyFormation('A')"></select>
+        </div>
+
+        <h3>Controles de Pizarra</h3>
+        <button id="btnMode" class="btn-mode" onclick="toggleMode()">Modo: 📍 Mover Jugadores</button>
+        
+        <div class="play-controls">
+            <button class="btn-play" onclick="playAnimation()">▶ Prueba</button>
+            <button class="btn-pause" onclick="pauseAnimation()">⏸ Stop</button>
+            <button class="btn-resume" onclick="resumeAnimation()">⏯ Cont.</button>
+            <button class="btn-clear" onclick="clearTargets()">⏹ Borrar Destinos</button>
+        </div>
+
+        <button class="btn-reset" onclick="hardReset()">🔄 Resetear Todo</button>
+
+        <div class="instructions">
+            <strong>Doble clic</strong> en una ficha para cambiar su nombre/número.<br><br>
+            <strong>Mover Jugadores:</strong> Cambia la formación base.<br>
+            <strong>Trazar Destinos:</strong> Arrastra para indicar a dónde deben correr. Luego pulsa "Prueba".
+        </div>
+    </div>
+
+    <div class="pitch-wrapper" id="pitch">
+        <svg id="lines"></svg>
+        <div id="pieces-layer"></div>
+    </div>
+</div>
+
+<script>
+    // --- ESTADO GLOBAL ---
+    const STORAGE_KEY = 'pizarra_vertical_v2';
+    let entities = [];
+    let sport = '11';
+    let isTargetMode = false;
+    let animProgress = 0;
+    let isPlaying = false, isPaused = false;
+    let animFrame;
+    let lastTime = 0;
+
+    // --- FORMACIONES (X, Y porcentuales respecto a la mitad de su campo) ---
+    // El campo de juego interno es de X: 30 a 470 (Ancho 440), Y: 30 a 720 (Alto 690).
+    const form11 = {
+        "4-4-2": [
+            {x: 0.5, y: 0.95}, // GK
+            {x: 0.15, y: 0.75}, {x: 0.35, y: 0.8}, {x: 0.65, y: 0.8}, {x: 0.85, y: 0.75}, // DEF
+            {x: 0.15, y: 0.45}, {x: 0.35, y: 0.5}, {x: 0.65, y: 0.5}, {x: 0.85, y: 0.45}, // MID
+            {x: 0.35, y: 0.25}, {x: 0.65, y: 0.25} // FWD
+        ],
+        "4-3-3": [
+            {x: 0.5, y: 0.95},
+            {x: 0.15, y: 0.75}, {x: 0.35, y: 0.8}, {x: 0.65, y: 0.8}, {x: 0.85, y: 0.75},
+            {x: 0.3, y: 0.55}, {x: 0.5, y: 0.6}, {x: 0.7, y: 0.55},
+            {x: 0.2, y: 0.25}, {x: 0.5, y: 0.2}, {x: 0.8, y: 0.25}
+        ],
+        "4-2-3-1": [
+            {x: 0.5, y: 0.95},
+            {x: 0.15, y: 0.75}, {x: 0.35, y: 0.8}, {x: 0.65, y: 0.8}, {x: 0.85, y: 0.75},
+            {x: 0.4, y: 0.6}, {x: 0.6, y: 0.6},
+            {x: 0.2, y: 0.4}, {x: 0.5, y: 0.45}, {x: 0.8, y: 0.4},
+            {x: 0.5, y: 0.2}
+        ],
+        "3-5-2": [
+            {x: 0.5, y: 0.95},
+            {x: 0.3, y: 0.8}, {x: 0.5, y: 0.85}, {x: 0.7, y: 0.8},
+            {x: 0.15, y: 0.5}, {x: 0.35, y: 0.6}, {x: 0.5, y: 0.5}, {x: 0.65, y: 0.6}, {x: 0.85, y: 0.5},
+            {x: 0.4, y: 0.25}, {x: 0.6, y: 0.25}
+        ],
+        "5-3-2": [
+            {x: 0.5, y: 0.95},
+            {x: 0.1, y: 0.7}, {x: 0.3, y: 0.8}, {x: 0.5, y: 0.85}, {x: 0.7, y: 0.8}, {x: 0.9, y: 0.7},
+            {x: 0.3, y: 0.5}, {x: 0.5, y: 0.55}, {x: 0.7, y: 0.5},
+            {x: 0.4, y: 0.25}, {x: 0.6, y: 0.25}
+        ]
+    };
+
+    const form5 = {
+        "1-2-1 (Rombo)": [
+            {x: 0.5, y: 0.95}, // GK
+            {x: 0.5, y: 0.7},  // Cierre
+            {x: 0.2, y: 0.45}, {x: 0.8, y: 0.45}, // Alas
+            {x: 0.5, y: 0.2}   // Pívot
+        ],
+        "2-2 (Cuadrado)": [
+            {x: 0.5, y: 0.95},
+            {x: 0.3, y: 0.65}, {x: 0.7, y: 0.65},
+            {x: 0.3, y: 0.25}, {x: 0.7, y: 0.25}
+        ],
+        "3-1": [
+            {x: 0.5, y: 0.95},
+            {x: 0.2, y: 0.6}, {x: 0.5, y: 0.7}, {x: 0.8, y: 0.6},
+            {x: 0.5, y: 0.2}
+        ],
+        "1-3": [
+            {x: 0.5, y: 0.95},
+            {x: 0.5, y: 0.7},
+            {x: 0.2, y: 0.3}, {x: 0.5, y: 0.2}, {x: 0.8, y: 0.3}
+        ],
+        "4-0 (Línea)": [
+            {x: 0.5, y: 0.95},
+            {x: 0.2, y: 0.55}, {x: 0.4, y: 0.65}, {x: 0.6, y: 0.65}, {x: 0.8, y: 0.55}
+        ]
+    };
+
+    function init() {
+        populateFormations();
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (cached) {
+            try {
+                const data = JSON.parse(cached);
+                sport = data.sport;
+                entities = data.entities;
+                document.getElementById('sportMode').value = sport;
+                updateSelects();
+            } catch (e) {
+                generateBase();
+            }
+        } else {
+            generateBase();
+        }
+        drawPitchLines();
+        render();
+    }
+
+    function populateFormations() {
+        const selA = document.getElementById('formationA');
+        const selB = document.getElementById('formationB');
+        const dict = sport === '11' ? form11 : form5;
+        selA.innerHTML = ''; selB.innerHTML = '';
+        for (let key in dict) {
+            selA.innerHTML += `<option value="${key}">${key}</option>`;
+            selB.innerHTML += `<option value="${key}">${key}</option>`;
+        }
+    }
+
+    function updateSelects() {
+        populateFormations();
+    }
+
+    function generateBase() {
+        entities = [];
+        const count = sport === '11' ? 11 : 5;
+        const formations = sport === '11' ? form11 : form5;
+        const defaultKey = Object.keys(formations)[0]; // 4-4-2 o 1-2-1
+        
+        document.getElementById('formationA').value = defaultKey;
+        document.getElementById('formationB').value = defaultKey;
+
+        // Limites internos de la cancha para mapeo: X(30 a 470), Y(30 a 720)
+        const mapCoords = (percentX, percentY, isTopTeam) => {
+            const w = 440; // 470 - 30
+            const h = 690; // 720 - 30
+            const midY = 375; // Mitad
+            
+            let finalX = 30 + (percentX * w);
+            let finalY;
+            if(isTopTeam) {
+                // Espejo para el equipo de arriba (invierte Y de 0-1)
+                finalY = 30 + ((1 - percentY) * (h/2 - 10)); 
+            } else {
+                finalY = midY + 10 + (percentY * (h/2 - 40));
+            }
+            return {x: finalX, y: finalY};
+        };
+
+        // Equipo A (Rojo, Abajo)
+        formations[defaultKey].forEach((pos, i) => {
+            let coords = mapCoords(pos.x, pos.y, false);
+            entities.push({ id: `A${i}`, type: 'teamA', name: i === 0 ? 'POR' : `${i+1}`, x: coords.x, y: coords.y, tx: null, ty: null });
+        });
+
+        // Equipo B (Azul, Arriba)
+        formations[defaultKey].forEach((pos, i) => {
+            let coords = mapCoords(pos.x, pos.y, true);
+            entities.push({ id: `B${i}`, type: 'teamB', name: i === 0 ? 'POR' : `${i+1}`, x: coords.x, y: coords.y, tx: null, ty: null });
+        });
+
+        // Balón
+        entities.push({ id: `ball`, type: 'ball', name: '', x: 250, y: 375, tx: null, ty: null });
+        saveData();
+    }
+
+    function applyFormation(teamStr) {
+        const key = document.getElementById(`formation${teamStr}`).value;
+        const layout = sport === '11' ? form11[key] : form5[key];
+        
+        const mapCoords = (percentX, percentY, isTopTeam) => {
+            const w = 440, h = 690, midY = 375;
+            let finalX = 30 + (percentX * w);
+            let finalY = isTopTeam ? 30 + ((1 - percentY) * (h/2 - 10)) : midY + 10 + (percentY * (h/2 - 40));
+            return {x: finalX, y: finalY};
+        };
+
+        let teamIdx = 0;
+        entities.forEach(ent => {
+            if (ent.type === `team${teamStr}`) {
+                let coords = mapCoords(layout[teamIdx].x, layout[teamIdx].y, teamStr === 'B');
+                ent.x = coords.x;
+                ent.y = coords.y;
+                ent.tx = null; ent.ty = null;
+                teamIdx++;
+            }
+        });
+        clearTargets(); // detiene animaciones
+        saveData();
+        render();
+    }
+
+    function changeSport() {
+        sport = document.getElementById('sportMode').value;
+        const pitch = document.getElementById('pitch');
+        if(sport === '5') pitch.classList.add('futsal');
+        else pitch.classList.remove('futsal');
+        
+        updateSelects();
+        generateBase();
+        drawPitchLines();
+        render();
+    }
+
+    function drawPitchLines() {
+        const svg = document.getElementById('lines');
+        const c = 'var(--line-color)';
+        // Medidas base: 500x750. Margen exterior 30px.
+        // Área de juego: X: 30 a 470 (Ancho 440). Y: 30 a 720 (Alto 690).
+        let lines = `
+            <rect x="30" y="30" width="440" height="690" fill="none" stroke="${c}" stroke-width="2"/>
+            <line x1="30" y1="375" x2="470" y2="375" stroke="${c}" stroke-width="2"/>
+            <circle cx="250" cy="375" r="4" fill="${c}"/>
+        `;
+
+        if (sport === '11') {
+            lines += `
+                <circle cx="250" cy="375" r="45" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="210" y="20" width="80" height="10" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="210" y="720" width="80" height="10" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="110" y="30" width="280" height="85" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="110" y="635" width="280" height="85" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="180" y="30" width="140" height="30" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="180" y="690" width="140" height="30" fill="none" stroke="${c}" stroke-width="2"/>
+                <circle cx="250" cy="80" r="3" fill="${c}"/>
+                <circle cx="250" cy="670" r="3" fill="${c}"/>
+                <path d="M 210 115 A 45 45 0 0 0 290 115" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 210 635 A 45 45 0 0 1 290 635" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 30 45 A 15 15 0 0 0 45 30" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 470 45 A 15 15 0 0 1 455 30" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 30 705 A 15 15 0 0 1 45 720" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 470 705 A 15 15 0 0 0 455 720" fill="none" stroke="${c}" stroke-width="2"/>
+            `;
+        } else {
+            lines += `
+                <circle cx="250" cy="375" r="30" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="220" y="25" width="60" height="5" fill="none" stroke="${c}" stroke-width="2"/>
+                <rect x="220" y="720" width="60" height="5" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 160 30 A 90 90 0 0 0 340 30" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 160 720 A 90 90 0 0 1 340 720" fill="none" stroke="${c}" stroke-width="2"/>
+                <circle cx="250" cy="90" r="3" fill="${c}"/>
+                <circle cx="250" cy="660" r="3" fill="${c}"/>
+                <circle cx="250" cy="130" r="2" fill="${c}"/>
+                <circle cx="250" cy="620" r="2" fill="${c}"/>
+                <path d="M 30 35 A 5 5 0 0 0 35 30" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 470 35 A 5 5 0 0 1 465 30" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 30 715 A 5 5 0 0 1 35 720" fill="none" stroke="${c}" stroke-width="2"/>
+                <path d="M 470 715 A 5 5 0 0 0 465 720" fill="none" stroke="${c}" stroke-width="2"/>
+            `;
+        }
+        svg.innerHTML = lines;
+    }
+
+    function toggleMode() {
+        isTargetMode = !isTargetMode;
+        const btn = document.getElementById('btnMode');
+        if (isTargetMode) {
+            btn.innerHTML = "Modo: 🎯 Trazar Destinos";
+            btn.classList.add('active');
+        } else {
+            btn.innerHTML = "Modo: 📍 Mover Jugadores";
+            btn.classList.remove('active');
+        }
+        if(!isPlaying && !isPaused) updatePositions(0);
+    }
+
+    function clearTargets() {
+        isPlaying = false; isPaused = false;
+        cancelAnimationFrame(animFrame);
+        entities.forEach(e => { e.tx = null; e.ty = null; });
+        updatePositions(0);
+        saveData();
+    }
+
+    function hardReset() {
+        if(confirm("¿Seguro que quieres borrar todo y volver al estado de fábrica?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            init();
+        }
+    }
+
+    function render() {
+        const container = document.getElementById('pieces-layer');
+        const svgLines = document.getElementById('lines');
+        
+        // Limpiar overlays previos (manteniendo la cancha)
+        const overlays = svgLines.querySelectorAll('.anim-line');
+        overlays.forEach(o => o.remove());
+
+        let linesHTML = '';
+        container.innerHTML = '';
+
+        entities.forEach(ent => {
+            // Dibujar rutas
+            if (ent.tx !== null && ent.ty !== null) {
+                const color = ent.type === 'teamA' ? 'rgba(211,47,47,0.8)' : ent.type === 'teamB' ? 'rgba(25,118,210,0.8)' : 'rgba(255,255,255,0.8)';
+                linesHTML += `<line class="anim-line" x1="${ent.x}" y1="${ent.y}" x2="${ent.tx}" y2="${ent.ty}" stroke="${color}" stroke-width="2" stroke-dasharray="4,4" />
+                              <circle class="anim-line" cx="${ent.tx}" cy="${ent.ty}" r="4" fill="${color}" opacity="0.6"/>`;
+            }
+
+            // Crear div de la ficha
+            const el = document.createElement('div');
+            el.className = `piece ${ent.type}`;
+            el.dataset.id = ent.id;
+            el.textContent = ent.name;
+            
+            let cx = ent.x; let cy = ent.y;
+            if (ent.tx !== null && ent.ty !== null) {
+                if (isPlaying || isPaused || isTargetMode) {
+                    cx = ent.x + (ent.tx - ent.x) * animProgress;
+                    cy = ent.y + (ent.ty - ent.y) * animProgress;
+                }
+            }
+            if(isTargetMode && !isPlaying && !isPaused && ent.tx !== null) {
+                cx = ent.tx; cy = ent.ty; // Mostrar preview en el destino
+            }
+
+            el.style.left = `${cx}px`;
+            el.style.top = `${cy}px`;
+
+            el.addEventListener('mousedown', dragStart);
+            el.addEventListener('touchstart', dragStart, {passive: false});
+            el.addEventListener('dblclick', () => {
+                let p = prompt("Nuevo texto:", ent.name);
+                if(p !== null) { ent.name = p.slice(0, 5); saveData(); render(); }
+            });
+
+            container.appendChild(el);
+        });
+
+        svgLines.innerHTML += linesHTML;
+    }
+
+    function updatePositions(p) {
+        animProgress = p;
+        render();
+    }
+
+    // --- ANIMACIÓN ---
+    function playAnimation() {
+        if (isPlaying && !isPaused) return;
+        if (!isPlaying) animProgress = 0;
+        
+        isPlaying = true; isPaused = false;
+        lastTime = performance.now();
+        
+        function tick(now) {
+            if (!isPlaying) return;
+            if (!isPaused) {
+                let dt = now - lastTime;
+                animProgress += dt / 2500; // 2.5 seg
+                if (animProgress >= 1) { animProgress = 1; isPlaying = false; }
+                updatePositions(animProgress);
+            }
+            lastTime = now;
+            if (isPlaying) animFrame = requestAnimationFrame(tick);
+        }
+        animFrame = requestAnimationFrame(tick);
+    }
+
+    function pauseAnimation() { if(isPlaying) isPaused = true; }
+    function resumeAnimation() { if(isPlaying && isPaused) { isPaused = false; lastTime = performance.now(); animFrame = requestAnimationFrame(playAnimation); } }
+
+    // --- DRAG ---
+    let dragItem = null;
+    function dragStart(e) {
+        if(isPlaying && !isPaused) return;
+        if(e.type === 'touchstart') e.preventDefault();
+        dragItem = entities.find(x => x.id === e.target.dataset.id);
+        document.addEventListener('mousemove', dragging);
+        document.addEventListener('touchmove', dragging, {passive: false});
+        document.addEventListener('mouseup', dragEnd);
+        document.addEventListener('touchend', dragEnd);
+    }
+
+    function dragging(e) {
+        if(!dragItem) return;
+        const pitchEl = document.getElementById('pitch');
+        const rect = pitchEl.getBoundingClientRect();
+        // Corrige la escala visual (en móvil la cancha se reduce con transform)
+        const sx = pitchEl.offsetWidth / rect.width;
+        const sy = pitchEl.offsetHeight / rect.height;
+        let cx = ((e.clientX ?? e.touches[0].clientX) - rect.left) * sx;
+        let cy = ((e.clientY ?? e.touches[0].clientY) - rect.top) * sy;
+        
+        cx = Math.max(0, Math.min(cx, pitchEl.offsetWidth));
+        cy = Math.max(0, Math.min(cy, pitchEl.offsetHeight));
+
+        if(isTargetMode) { dragItem.tx = cx; dragItem.ty = cy; }
+        else { dragItem.x = cx; dragItem.y = cy; dragItem.tx = null; dragItem.ty = null; }
+        render();
+    }
+
+    function dragEnd() {
+        dragItem = null;
+        saveData();
+        document.removeEventListener('mousemove', dragging);
+        document.removeEventListener('touchmove', dragging);
+        document.removeEventListener('mouseup', dragEnd);
+        document.removeEventListener('touchend', dragEnd);
+    }
+
+    function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ sport, entities })); }
+
+    init();
+</script>
+<script>
+    // Ajusta la escala de la cancha al ancho de la pantalla en móviles
+    function ajustarEscalaCancha() {
+        // En móviles el layout viewport puede ensancharse; usamos el ancho real de pantalla
+        const ancho = Math.min(window.innerWidth, screen.width || window.innerWidth);
+        const disponible = Math.min(ancho - 24, 500);
+        const escala = ancho <= 900 ? Math.min(1, disponible / 500) : 1;
+        document.documentElement.style.setProperty('--pitch-scale', escala.toFixed(3));
+    }
+    window.addEventListener('resize', ajustarEscalaCancha);
+    ajustarEscalaCancha();
+</script>
+</body>
+</html>
